@@ -1,6 +1,6 @@
 Build a cryptocurrency investment dashboard.
 
-1- line plot of time-series data(daily resolution)
+1- line plot of time-series data(daily or hourly resolution)
     filter by date.
     Add assets and their respective values (opening, high, low, and close).
 2-  Important metrics about the assets
@@ -8,3 +8,6 @@ Build a cryptocurrency investment dashboard.
     b) week-ahead and include news and tweet features in the forecasts.
 
 4-  Investment scenarios, If I buy today, what will the ROI be the next day or next week?
+
+
+#TODO: generate requiements.txt file with :pigar --without-referenced-comments
