@@ -5,69 +5,58 @@ import pandas as pd
 import streamlit as st 
 from prophet import Prophet, forecaster
 import datetime
-from prophet.plot import plot_components, plot_plotly
+from prophet.plot import plot, plot_components, plot_plotly
 from plotly import graph_objects as go
 import plotly.express as px 
 from streamlit.type_util import data_frame_to_bytes
 import yfinance as yf
 import numpy as np
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+from stock_object import Stock
 
 st.set_page_config(layout='wide',initial_sidebar_state='expanded')
 
-TODAY=datetime.date.today()
+#------ layout setting---------------------------
 window_selection_c=st.sidebar.container()
 sub_columns=window_selection_c.columns(2)
-START=sub_columns[0].date_input('From',value=TODAY-datetime.timedelta(days=7),max_value=TODAY-datetime.timedelta(days=1))
+
+change_c=st.sidebar.container()
+
+#----------Time window selection-----------------
+TODAY=datetime.date.today()
+START=sub_columns[0].date_input('From',value=TODAY-datetime.timedelta(days=700),max_value=TODAY-datetime.timedelta(days=1))
 END=sub_columns[1].date_input('To',value=TODAY,max_value=TODAY)
 
 
-
-STOCKS=np.array(['AAPL','GOOG','MSFT','GME'])
+#---------------stock selection------------------
+STOCKS=np.array(['AAPL','GOOG','MSFT','GME']) #TODO : include all stocks
 
 selected_stocks=window_selection_c.multiselect('Select stocks ',STOCKS,default='GOOG')
+
+
+
+#------------------------Plot stock linecharts--------------------
+
+
+fig =go.Figure()
+for choice in selected_stocks:
+    stock=Stock(symbol=choice)
+    stock.load_data(START,END,inplace=True)
+    fig=stock.plot_raw_data(fig)
+
+    with change_c:
+        stock.show_delta()
+
+fig.update_layout(
+    margin=dict(l=0, r=0, t=0, b=0,pad=0),
+    width=1300,
+    autosize=False,
+    template='plotly_dark'
     
-def load_data(ticker,start,end):
-    data=yf.download(ticker,start,end)
-    data.reset_index(inplace=True)
-    data.rename(columns={'Date':'datetime'},inplace=True)
-    data['date']=data.apply(lambda raw: raw['datetime'].date(),axis=1)
-    return data
-
-def delta(data,start,end,column='Close'):
-    epsilon=1e-6
-    s=data.query('date==@start')[column].values[0]
-    print(f'starting value is {s}')
-    e=data.query('date==@end')[column].values[0]
-    print(f'ending value is {e}')
-    difference=round(e-s,2)
-    change=round(difference/(s+epsilon)*100,2)
-    e=round(e,2)
-    return (difference, change, e)
-
-selected_stock=selected_stocks[0]
-data=load_data(selected_stock,START,END+datetime.timedelta(days=1))
-
-columns=st.columns(2)
-def plot_raw_data(context):
-    fig=px.line(data,x='date',y='Close')
-    fig.update_layout(
-                autosize=False,
-                width=1100,
-                height=300)
-    context.plotly_chart(fig)
+)
 
 
-
-plot_raw_data(st)
-
-change_c=st.sidebar.container()
-diff,change,e=delta(data,START,END)
-
-
-show_percent=True
-if not show_percent:
-    change_c.metric(label=selected_stock[0],value=e,delta=diff)
-else:
-    change_c.metric(label=selected_stocks[0],value=e,delta=f'{change}%')
+st.write(fig)
 
 
