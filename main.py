@@ -53,10 +53,16 @@ for choice in selected_stocks:
     with change_c:
         stock.show_delta()
 fig.update_layout(
-    margin=dict(l=0, r=0, t=0, b=0, pad=0),
-    width=chart_width,
-    autosize=False,
-    template="plotly_dark",
+            width=chart_width,
+            margin=dict(l=0, r=0, t=0, b=0, pad=0),
+            legend=dict(
+                x=0,
+                y=0.99,
+                traceorder="normal",
+                font=dict(size=12),
+            ),
+            autosize=False,
+            template="plotly_dark",
 )
 
 
@@ -76,11 +82,16 @@ if "HORIZON" not in st.session_state:
     # set the initial default value of the slider widget
     st.session_state.HORIZON = 7
 
-
+if "train_job" not in st.session_state:
+    # set the initial default value of the slider widget
+    st.session_state.train_job = False
 # ------------------------------------------Training configurations-------------------------------------
 st.sidebar.markdown("## Forecasts")
 form = st.sidebar.form(key="train_dataset")
+
 SYMB = form.selectbox("select stock", STOCKS)
+
+
 form.markdown("## Select interval lengths")
 HORIZON = form.number_input(
     "Inference horizon", min_value=7, max_value=200, key="HORIZON"
@@ -97,9 +108,10 @@ TRAIN_INTERVAL_LENGTH = form.number_input(
     key="TRAIN_INTERVAL_LENGTH",
 )
 
+
 form.form_submit_button(
-    label="Load and train",
-    on_click=Stock.train_forecast_report(
-        chart_width, SYMB, TRAIN_INTERVAL_LENGTH, TEST_INTERVAL_LENGTH
-    ),
+    label="Train",
+    on_click=Stock.launch_training
 )
+
+Stock.train_forecast_report(chart_width, SYMB, TRAIN_INTERVAL_LENGTH, TEST_INTERVAL_LENGTH)

@@ -24,7 +24,7 @@ class Stock:
         self.symbol = symbol
         self.data = self.load_data(self.start, self.end, column)
 
-    @st.cache
+    @st.cache(show_spinner=False)
     def load_data(self, start, end, inplace=False):
         """
         takes a start and end dates, download data do some processing and returns dataframe
@@ -97,7 +97,7 @@ class Stock:
     ) -> pd.DataFrame:
         return df.rename(columns={date_column: "ds", y_column: "y"})
 
-    @st.cache
+    @st.cache(show_spinner=False)
     def load_train_test_data(self, TEST_INTERVAL_LENGTH, TRAIN_INTERVAL_LENGTH):
         """Returns two dataframes for testing and training"""
         TODAY = Stock.nearest_business_day(datetime.date.today())
@@ -119,7 +119,7 @@ class Stock:
         self.train_data = train_data
         self.test_data = test_data
 
-    @st.cache(suppress_st_warning=True)
+    @st.cache(show_spinner=False)
     def train_prophet(self, kwargs={}):
         m = Prophet(**kwargs)
         m.fit(self.train_data)
@@ -189,18 +189,32 @@ class Stock:
 
         return fig
 
+    @staticmethod 
+    def launch_training():
+        st.session_state.train_job=True
+
     @staticmethod
-    def train_forecast_report(
-        chart_width, symb, TRAIN_INTERVAL_LENGTH, TEST_INTERVAL_LENGTH
-    ):
-        stock = Stock(symb)
-        stock.load_train_test_data(TEST_INTERVAL_LENGTH, TRAIN_INTERVAL_LENGTH)
-        stock.train_prophet()
-        fig = stock.plot_test(chart_width)
-        st.markdown(
-            f"## {symb} stock forecasts on testing set, Testing error {round(stock.test_mape*100,2)}%"
-        )
-        st.plotly_chart(fig)
+    def train_forecast_report(chart_width, symb, TRAIN_INTERVAL_LENGTH, TEST_INTERVAL_LENGTH): 
+        if st.session_state.train_job:
+            bar=st.empty()
+            bar=st.progress(0)
+
+            stock = Stock(symb)
+            bar.progress(10)
+            stock.load_train_test_data(TEST_INTERVAL_LENGTH, TRAIN_INTERVAL_LENGTH)
+            bar.progress(30)
+            stock.train_prophet()
+            bar.progress(70)
+            fig = stock.plot_test(chart_width)
+            bar.progress(100)
+            bar.empty()
+            st.markdown(
+                f"## {symb} stock forecasts on testing set, Testing error {round(stock.test_mape*100,2)}%"
+            )
+            st.plotly_chart(fig)
+        else:
+            st.markdown('Setup training job and hit Train')
+            
         
     def save_forecasts(self,path):
         self.forecasts.to_csv(path)
