@@ -8,18 +8,23 @@ from sklearn.metrics import mean_absolute_percentage_error
 
 class Stock:
     """
-    This class enables data loading, plotting and statistical analysis of a given stock
+    This class enables data loading, plotting and statistical analysis of a given stock,
+     upon initialization load a sample of data to check if stock exists. 
+        
     """
+    params={
+    'changepoint_prior_scale':0.0018298282889708827,
+    'holidays_prior_scale':0.00011949782374119523,
+    'seasonality_mode':'additive',
+    'seasonality_prior_scale':4.240162804451275
+        }
 
-    def __init__(self, symbol="GOOG", column="Close"):
-        """
-        create a stock object , initialize time window and loads data.
-        """
+    def __init__(self, symbol="GOOG"):
+       
         self.end = datetime.datetime.today()
         self.start = self.end - datetime.timedelta(days=4)
-        self.column = column
         self.symbol = symbol
-        self.data = self.load_data(self.start, self.end, column)
+        self.data = self.load_data(self.start, self.end)
 
     @st.cache(show_spinner=False)
     def load_data(self, start, end, inplace=False):
@@ -28,7 +33,6 @@ class Stock:
         """
 
         data = yf.download(self.symbol, start, end + datetime.timedelta(days=1))
-        print(len(data))
         try:
             assert len(data) > 0
         except AssertionError:
@@ -37,8 +41,7 @@ class Stock:
         data.rename(columns={"Date": "datetime"}, inplace=True)
         data["date"] = data.apply(lambda raw: raw["datetime"].date(), axis=1)
 
-        data = data[["date", self.column]]
-        data['change']=data[[self.column]].pct_change()
+        data = data[["date", 'Close']]
         if inplace:
             self.data = data
             self.start = start
@@ -48,65 +51,23 @@ class Stock:
 
     def plot_raw_data(self, fig):
         """
-        Plot time-serie line chart of closing price
+        Plot time-serie line chart of closing price on a given plotly.graph_objects.Figure object
         """
-        if len(self.data!=0):
-            fig = fig.add_trace(
-                go.Scatter(
-                    x=self.data.date,
-                    y=self.data[self.column],
-                    mode="lines",
-                    name=self.symbol,
-                )
-            )
-            return fig
-        else:
-            return fig
-
-    def plot_pct_change(self, fig):
-        """
-        Plot percentage change of stock closing price
-        """
-        fig.add_trace(
+        fig = fig.add_trace(
             go.Scatter(
                 x=self.data.date,
-                y=self.data['change'],
+                y=self.data['Close'],
                 mode="lines",
-                name=f"{self.symbol} {self.column} change %" ,
+                name=self.symbol,
             )
         )
-
-      
         return fig
-
-    def show_delta(self):
-        if len(self.data!=0):
-            epsilon = 1e-6
-            i = self.start
-            j = self.end
-            s = self.data.query("date==@i")[self.column].values[0]
-            e = self.data.query("date==@j")[self.column].values[0]
-            difference = round(e - s, 2)
-            change = round(difference / (s + epsilon) * 100, 2)
-            e = round(e, 2)
-            cols = st.columns(2)
-            (color, marker) = ("green", "+") if difference >= 0 else ("red", "-")
-
-            cols[0].markdown(
-                f"""<p style="font-size: 90%;margin-left:5px">{self.symbol} \t {e}</p>""",
-                unsafe_allow_html=True,
-            )
-            cols[1].markdown(
-                f"""<p style="color:{color};font-size:90%;margin-right:5px">{marker} \t {difference} {marker} {change} % </p>""",
-                unsafe_allow_html=True,
-            ) 
-        else:
-            st.write('No data')
 
     @staticmethod
     def nearest_business_day(DATE: datetime.date):
         """
-        Takes a date and transform it to the nearest business day
+        Takes a date and transform it to the nearest business day, 
+        static because we would like to use it without a stock object.
         """
         if DATE.weekday() == 5:
             DATE = DATE - datetime.timedelta(days=1)
@@ -114,6 +75,33 @@ class Stock:
         if DATE.weekday() == 6:
             DATE = DATE + datetime.timedelta(days=1)
         return DATE
+
+    def show_delta(self):
+        """
+        Visualize a summary of the stock change over the specified time period
+        """
+        epsilon = 1e-6
+        i = self.start
+        j = self.end
+        s = self.data.query("date==@i")['Close'].values[0]
+        e = self.data.query("date==@j")['Close'].values[0]
+
+        difference = round(e - s, 2)
+        change = round(difference / (s + epsilon) * 100, 2)
+        e = round(e, 2)
+        cols = st.columns(2)
+        (color, marker) = ("green", "+") if difference >= 0 else ("red", "-")
+
+        cols[0].markdown(
+            f"""<p style="font-size: 90%;margin-left:5px">{self.symbol} \t {e}</p>""",
+            unsafe_allow_html=True,
+        )
+        cols[1].markdown(
+            f"""<p style="color:{color};font-size:90%;margin-right:5px">{marker} \t {difference} {marker} {change} % </p>""",
+            unsafe_allow_html=True
+        ) 
+
+
 
     @staticmethod
     def for_prophet(df: pd.DataFrame, date_column="date", y_column="Close") -> pd.DataFrame:
@@ -144,14 +132,9 @@ class Stock:
 
 
     @st.cache(show_spinner=False)
-    def train_prophet(self, kwargs={}):
-        params={
-            'changepoint_prior_scale':0.0018298282889708827,
-            'holidays_prior_scale':0.00011949782374119523,
-            'seasonality_mode':'additive',
-            'seasonality_prior_scale':4.240162804451275
-        }
-        m = Prophet(**params)
+    def train_prophet(self): 
+        
+        m = Prophet(**self.params)
         m.fit(self.train_data)
         self.model = m
         forecasts = m.predict(self.test_data)
@@ -163,7 +146,7 @@ class Stock:
         )
 
 
-    def plot_test(self, chart_width):
+    def plot_test(self):
         fig = go.Figure()
         fig.add_trace(
             go.Scatter(
@@ -206,7 +189,7 @@ class Stock:
             )
         )
         fig.update_layout(
-            width=chart_width,
+            width=st.session_state.CHART_WIDTH,
             margin=dict(l=0, r=0, t=0, b=0, pad=0),
             legend=dict(
                 x=0,
@@ -221,15 +204,17 @@ class Stock:
         return fig
 
 
-    @staticmethod 
-    def launch_training():
-        st.session_state.train_job=True
-
-
-    def plot_inference(self,chart_width):
+    def plot_inference(self) -> go.Figure:
+        """
+        Generate forecasts for the given horizon and plots them, returns a plotly.graph_objects.Figure
+        """
+        all_df=pd.concat([self.train_data,self.test_data[['ds','y']]])
+        m=Prophet(**self.params)
+        m.fit(all_df)
+        self.model=m
         future=self.model.make_future_dataframe(periods=st.session_state.HORIZON,include_history=False)
-        print(future.shape)
         forecasts=self.model.predict(future)
+
         fig=go.Figure()
         fig.add_trace(
         go.Scatter(
@@ -263,7 +248,7 @@ class Stock:
         )
         )
         fig.update_layout(
-        width=chart_width,
+        width=st.session_state.CHART_WIDTH,
         margin=dict(l=0, r=0, t=0, b=0, pad=0),
         legend=dict(
             x=0,
@@ -274,46 +259,50 @@ class Stock:
         autosize=False,
         template="plotly_dark",
         )
-
         return fig
 
 
     @staticmethod
-    def train_forecast_report(chart_width, symb): 
-        """Launch training and plot testing data and predictions, finally it plots forecasts up to the specified horizon"""
-        if st.session_state.train_job:
-            text=st.empty()
-            bar=st.empty()
+    def train_test_forecast_report(symb): 
+        """Launch training and plot testing results and reports MAPE error, finally it plots forecasts up to the specified horizon"""
+        if st.session_state.TRAIN_JOB or st.session_state.TRAINED:
+            text=st.empty() # Because streamlit adds widgets sequentially, we have to reserve a place at the top (after the chart of part 1)
+            bar=st.empty() # Reserve a place for a progess bar
             
-            text.write('Training model ... ')
+            text.write('Training model ... ') 
             bar=st.progress(0)
 
-            stock = Stock(symb)
+            stock = Stock(symb) 
             bar.progress(10)
-            TEST_INTERVAL_LENGTH=st.session_state.TEST_INTERVAL_LENGTH
+            TEST_INTERVAL_LENGTH=st.session_state.TEST_INTERVAL_LENGTH #Retrieve input from the user
             TRAIN_INTERVAL_LENGTH=st.session_state.TRAIN_INTERVAL_LENGTH
 
-            stock.load_train_test_data(TEST_INTERVAL_LENGTH, TRAIN_INTERVAL_LENGTH)
+            stock.load_train_test_data(TEST_INTERVAL_LENGTH, TRAIN_INTERVAL_LENGTH) #load train test data into the stock object, it's using cache
             bar.progress(30)
-            stock.train_prophet()
+            stock.train_prophet() #this is also using cache
             bar.progress(70)
-            text.write('Plotting test resulst')
-            fig = stock.plot_test(chart_width)
+            text.write('Plotting test results ...')
+            fig = stock.plot_test()
             bar.progress(100)
-            bar.empty()
+            bar.empty() #Turn the progress bar object back to what it was before and empty container
             st.markdown(
                 f"## {symb} stock forecasts on testing set, Testing error {round(stock.test_mape*100,2)}%"
             )
             st.plotly_chart(fig)
             text.write('Generating forecasts ... ')
-            fig2=stock.plot_inference(chart_width)
+            fig2=stock.plot_inference() #Generate forecasts and plot them (no cache but figures are not updated if their data didn't change)
             st.markdown(f'## Forecasts for the next {st.session_state.HORIZON} days')
             st.plotly_chart(fig2)
             text.empty()
+            """The button click will trigger this code to run only once, 
+               the following flag TRAINED will keep this block of code executing even after the click,
+               it won't redo everything however because we are using cache. 
+               this flag needs to be initialized to False in the session state in main.py before the button"""
 
+            st.session_state.TRAINED=True 
         else:
             st.markdown('Setup training job and hit Train')
-            
+
         
     def save_forecasts(self,path):
         self.forecasts.to_csv(path)
