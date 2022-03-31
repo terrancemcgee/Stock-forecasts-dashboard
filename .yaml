@@ -1,0 +1,4 @@
+docker build \
+    -t gcr.io/stock-forecast-dashboard/github.com/terrancemcgee/stock-forecasts-dashboard:$COMMIT_SHA \
+    -f Dockerfile \
+    .
