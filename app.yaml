@@ -1,2 +1,2 @@
-runtime: custom
+runtime: Python39
 env: flex
